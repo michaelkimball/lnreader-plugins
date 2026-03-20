@@ -1,6 +1,6 @@
 /* global Buffer, RequestInit */
 
-import { parse as parseProto } from 'protobufjs';
+import protobuf from 'protobufjs';
 
 type FetchInit = {
   headers?: Record<string, string | undefined> | Headers;
@@ -115,7 +115,7 @@ export const fetchProto = async function <ReturnType>(
   url: string,
   init?: FetchInit,
 ) {
-  const protoRoot = parseProto(protoInit.proto).root;
+  const protoRoot = protobuf.parse(protoInit.proto).root;
   const RequestMessge = protoRoot.lookupType(protoInit.requestType);
   if (RequestMessge.verify(protoInit.requestData)) {
     throw new Error('Invalid Proto');

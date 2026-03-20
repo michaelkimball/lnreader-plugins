@@ -8,7 +8,7 @@ import { isUrlAbsolute } from '@libs/isAbsoluteUrl';
 class RoyalRoad implements Plugin.PluginBase {
   id = 'royalroad';
   name = 'Royal Road';
-  version = '2.2.4';
+  version = '2.2.5';
   icon = 'src/en/royalroad/icon.png';
   site = 'https://www.royalroad.com/';
 
@@ -378,11 +378,7 @@ class RoyalRoad implements Plugin.PluginBase {
           noteBodyDepth = depth;
         }
 
-        if (
-          state === ParsingState.InChapter ||
-          (state === ParsingState.InNote && !inNoteBody) ||
-          (state === ParsingState.InNote && inNoteBody)
-        ) {
+        if (state === ParsingState.InChapter || state === ParsingState.InNote) {
           let tag = `<${name}`;
           for (const attr in attribs) {
             const value = attribs[attr].replace(/"/g, '&quot;');
