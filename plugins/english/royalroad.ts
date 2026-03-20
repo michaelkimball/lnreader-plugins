@@ -5,6 +5,8 @@ import { Filters, FilterTypes } from '@libs/filterInputs';
 import { NovelStatus } from '@libs/novelStatus';
 import { isUrlAbsolute } from '@libs/isAbsoluteUrl';
 
+// test
+
 class RoyalRoad implements Plugin.PluginBase {
   id = 'royalroad';
   name = 'Royal Road';
