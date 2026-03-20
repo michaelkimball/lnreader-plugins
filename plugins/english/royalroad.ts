@@ -5,12 +5,10 @@ import { Filters, FilterTypes } from '@libs/filterInputs';
 import { NovelStatus } from '@libs/novelStatus';
 import { isUrlAbsolute } from '@libs/isAbsoluteUrl';
 
-// test
-
 class RoyalRoad implements Plugin.PluginBase {
   id = 'royalroad';
   name = 'Royal Road';
-  version = '2.2.3';
+  version = '2.2.4';
   icon = 'src/en/royalroad/icon.png';
   site = 'https://www.royalroad.com/';
 
@@ -302,10 +300,13 @@ class RoyalRoad implements Plugin.PluginBase {
     let depth = 0;
 
     const chapterHtmlParts: string[] = [];
+    const noteTitleParts: string[] = [];
     const notesHtmlParts: string[] = [];
     const beforeNotesParts: string[] = [];
     const afterNotesParts: string[] = [];
     let isBeforeChapter = true;
+    let inNoteBody = false;
+    let noteBodyDepth = 0;
 
     const match = html.match(/<style>\n\s+.(.+?){[^{]+?display: none;/);
     const hiddenClass = match?.[1]?.trim();
@@ -334,10 +335,18 @@ class RoyalRoad implements Plugin.PluginBase {
         depth++;
         const classes = attribs['class'] || '';
 
+        const isRecommendationTable =
+          state === ParsingState.InNote &&
+          name === 'table' &&
+          attribs['border'] === '1' &&
+          attribs['style']?.includes('border-collapse') &&
+          attribs['style']?.includes('overflow: hidden') &&
+          attribs['style']?.includes('background-color');
+
         if (
           state !== ParsingState.InHidden &&
-          hiddenClass &&
-          classes.includes(hiddenClass)
+          ((hiddenClass && classes.includes(hiddenClass)) ||
+            isRecommendationTable)
         ) {
           stateBeforeHidden = { state: state, depth: stateDepth };
           state = ParsingState.InHidden;
@@ -360,7 +369,20 @@ class RoyalRoad implements Plugin.PluginBase {
             return;
         }
 
-        if (state === ParsingState.InChapter || state === ParsingState.InNote) {
+        if (
+          state === ParsingState.InNote &&
+          classes.includes('portlet-body') &&
+          classes.includes('author-note')
+        ) {
+          inNoteBody = true;
+          noteBodyDepth = depth;
+        }
+
+        if (
+          state === ParsingState.InChapter ||
+          (state === ParsingState.InNote && !inNoteBody) ||
+          (state === ParsingState.InNote && inNoteBody)
+        ) {
           let tag = `<${name}`;
           for (const attr in attribs) {
             const value = attribs[attr].replace(/"/g, '&quot;');
@@ -370,8 +392,10 @@ class RoyalRoad implements Plugin.PluginBase {
 
           if (state === ParsingState.InChapter) {
             chapterHtmlParts.push(tag);
-          } else {
+          } else if (inNoteBody) {
             notesHtmlParts.push(tag);
+          } else {
+            noteTitleParts.push(tag);
           }
         }
       },
@@ -381,11 +405,20 @@ class RoyalRoad implements Plugin.PluginBase {
             chapterHtmlParts.push(escapeHtml(text));
             break;
           case ParsingState.InNote:
-            notesHtmlParts.push(escapeHtml(text));
+            if (inNoteBody) {
+              notesHtmlParts.push(escapeHtml(text));
+            } else {
+              noteTitleParts.push(escapeHtml(text));
+            }
             break;
         }
       },
       onclosetag(name) {
+        if (inNoteBody && depth === noteBodyDepth && name === 'div') {
+          inNoteBody = false;
+          noteBodyDepth = 0;
+        }
+
         if (depth === stateDepth) {
           switch (state) {
             case ParsingState.InHidden:
@@ -408,13 +441,20 @@ class RoyalRoad implements Plugin.PluginBase {
             case ParsingState.InNote:
               const noteClass = `author-note-${isBeforeChapter ? 'before' : 'after'}`;
               const notesHtml = notesHtmlParts.join('').trim();
-              const fullNote = `<div class="${noteClass}">${notesHtml}</div>`;
-              if (isBeforeChapter) {
-                beforeNotesParts.push(fullNote);
-              } else {
-                afterNotesParts.push(fullNote);
+              const notesTextContent = notesHtml.replace(/<[^>]*>/g, '').trim();
+              if (notesTextContent) {
+                const noteTitleHtml = noteTitleParts.join('').trim();
+                const fullNote = `<div class="${noteClass}">${noteTitleHtml}${notesHtml}</div>`;
+                if (isBeforeChapter) {
+                  beforeNotesParts.push(fullNote);
+                } else {
+                  afterNotesParts.push(fullNote);
+                }
               }
+              noteTitleParts.length = 0;
               notesHtmlParts.length = 0;
+              inNoteBody = false;
+              noteBodyDepth = 0;
               state = ParsingState.Idle;
               stateDepth = 0;
               depth--;
@@ -428,8 +468,10 @@ class RoyalRoad implements Plugin.PluginBase {
             const closingTag = `</${name}>`;
             if (state === ParsingState.InChapter) {
               chapterHtmlParts.push(closingTag);
-            } else {
+            } else if (inNoteBody) {
               notesHtmlParts.push(closingTag);
+            } else {
+              noteTitleParts.push(closingTag);
             }
           }
         }
